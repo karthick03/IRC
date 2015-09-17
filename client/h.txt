@@ -1,5 +1,0 @@
-hello
-hello
-write
-client 5
-client 5

@@ -5,23 +5,19 @@
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
+#include <time.h>
 
 struct sockaddr_in dsock;
 int cli = 0, size = 0;
-char msg[10][100];
+char msg[20][100];
+char name[20];
 int count = 0;
 
+void print_intro();
 void print_messages();
-void sig_handle(int signum);
-
-void sig_handle(int signum)
-{
-	    printf("Signal detected\n");
-		char g[100];
-		recv(cli, &g, sizeof(g), 0);
-		strcpy(msg[count++], g);
-		print_messages();
-}
+static void show_msg();
+void client();
+void add_user();
 
 static void show_msg()
 {
@@ -55,13 +51,13 @@ void print_messages()
 	system("clear");
 
 	int i = 0;
-	for(; i < count;i++) printf("%s", msg[i]);
-
-	for(; i <=10; i++, printf("\n"));	
+//	for(; i <= 20; i++, printf("\r"));	
+	for(i = 0; i < count; i++) printf("%s", msg[i]);
+//	for(; i <= 20; i++, printf("\r"));	
 }
 
 
-void add_user()
+void add_message(char s[])
 {
 	char g[100];
 	sprintf(g, "echo \"client %d\" >> users.txt", getpid());
@@ -69,35 +65,95 @@ void add_user()
 	int t = getpid();
 	send(cli, &t, sizeof(t), 0);
 	send(cli, &g, sizeof(g), 0);
+}
 
+void print_intro()
+{
+	int i;
+	for(i = 0; i <= 16; i++) printf("* ");
+	printf("\n");
+
+	printf("*\t\t\t\t*\n*\t\t\t\t*\n*\t\t\t\t*\n*\t\tIRC\t\t*\n*\t\tBy\t\t*\n*\t\tFaizaan\t\t*\n*\t\tKarthick\t*\n*\t\tHarish\t\t*\n*\t\t\t\t*\n*\t\t\t\t*\n*\t\t\t\t*\n");
+	
+	for(i = 0; i <= 16; i++) printf("* ");
+	printf("\n");
+	
+	printf("Welcome to the IRC Network\n");
+	printf("Enter your name : ");
+	scanf("%s", name);
+}
+
+char *format_time(char *tim)
+{
+	char cti[10];
+	int i,j;
+	for(i = 0, j = 11; i < 9 ; i++, j++) cti[i] = tim[j];
+
+	return cti;
+}
+
+char *format_msg(char *tim, char *ini)
+{
+	char final_msg[120];
+	int i = 0, j =0;
+	final_msg[i++] = '[';
+
+	for(; j < 9; i++, j++) final_msg[i] = tim[j];
+
+	final_msg[i++] = ']';
+	final_msg[i++] = '\t';
+	final_msg[i++] = '<';
+
+	j = 0;
+	int len = strlen(name);
+	for(; j < len; i++, j++) final_msg[i] = name[j];
+
+	final_msg[i++] = '>';
+	final_msg[i++] = ' ';
+
+	j = 0;
+	len = strlen(ini);
+	for(; j < len; i++, j++) final_msg[i] = ini[j];
+
+	final_msg[i] = '\0';
+	return final_msg;
 }
 
 int main(int argc, char **argv)
 {
 	client();
 	
-	signal(SIGUSR1, sig_handle);
-
-//	add_user();
-
-	printf("My pid %d\n", getpid());	
-
-	char g[100];
-		
+	char g[100], tim_now[100];
+	print_intro();
+	
+	time_t currtime;	
 	while(1) 
 	{
-		if(count == 10)
+		if(count == 20)
 		{
 			count--;
 			int j;
-			for(j = 0; j < 9; j++) strcpy(msg[j], msg[j+1]);
+			for(j = 0; j < 19; j++) strcpy(msg[j], msg[j+1]);
 			strcpy(msg[j], "\0");
 		}
+		
+		printf("<%s> ", name);
 		fgets(msg[count], 100 , stdin);
-		send(cli, msg[count], sizeof(g), 0);
+		if(!strcmp(msg[count], "\n")) 
+		{
+			print_messages();
+			continue;
+		}
+		currtime = time(NULL);
+		strcpy(tim_now, ctime(&currtime));
+		strcpy(tim_now, format_time(tim_now));
+		strcpy(tim_now, format_msg(tim_now, msg[count]));
+		
+		send(cli, tim_now, sizeof(g), 0);
 		recv(cli, &g, sizeof(g), 0);
-		count++;
-		strcpy(msg[count], g);
+		strcpy(msg[count++], g);
+		
+		//add_message(g);
 		print_messages();
 	}
 
