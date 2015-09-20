@@ -9,7 +9,7 @@
 
 struct sockaddr_in dsock;
 int cli = 0, size = 0;
-char msg[20][100];
+char msg[2500];
 char name[20];
 int count = 0;
 
@@ -50,10 +50,7 @@ void print_messages()
 {
 	system("clear");
 
-	int i = 0;
-//	for(; i <= 20; i++, printf("\r"));	
-	for(i = 0; i < count; i++) printf("%s", msg[i]);
-//	for(; i <= 20; i++, printf("\r"));	
+	printf("%s", msg);
 }
 
 
@@ -129,17 +126,17 @@ int main(int argc, char **argv)
 	time_t currtime;	
 	while(1) 
 	{
-		if(count == 20)
+	/*	if(count == 20)
 		{
 			count--;
 			int j;
-			for(j = 0; j < 19; j++) strcpy(msg[j], msg[j+1]);
+//			for(j = 0; j < 19; j++) strcpy(msg[j], msg[j+1]);
 			strcpy(msg[j], "\0");
-		}
+		}*/
 		
 		printf("<%s> ", name);
-		fgets(msg[count], 100 , stdin);
-		if(!strcmp(msg[count], "\n")) 
+		fgets(msg, 100 , stdin);
+		if(!strcmp(msg, "\n")) 
 		{
 			print_messages();
 			continue;
@@ -147,11 +144,11 @@ int main(int argc, char **argv)
 		currtime = time(NULL);
 		strcpy(tim_now, ctime(&currtime));
 		strcpy(tim_now, format_time(tim_now));
-		strcpy(tim_now, format_msg(tim_now, msg[count]));
-		
-		send(cli, tim_now, sizeof(g), 0);
-		recv(cli, &g, sizeof(g), 0);
-		strcpy(msg[count++], g);
+		strcpy(tim_now, format_msg(tim_now, msg));
+
+		send(cli, tim_now, sizeof(tim_now), 0);
+		recv(cli, &msg, sizeof(msg), 0);
+//		strcpy(msg, g);
 		
 		//add_message(g);
 		print_messages();
