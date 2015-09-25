@@ -1,34 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
- 
-#include <netdb.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <time.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/types.h>
-#include <sys/socket.h>
- 
-#define SERVERIP "127.0.0.1"
+#include "../irc_common.h"
 #define SERVERPORT 8080
- 
-#define BUFFSIZE 1024
-#define ALIASLEN 32
-#define CHNLEN 16
-#define OPTLEN 16
-#define LINEBUFF 2048
- 
-struct PACKET {
-    char option[OPTLEN]; // instruction
-    char alias[ALIASLEN]; // client's alias
-    char channel[CHNLEN]; //client's channel
-    char buff[BUFFSIZE]; // payload 
-    time_t sendtime;
-};
- 
+
 struct USER {
         int sockfd; // user's socket descriptor
         char alias[ALIASLEN]; // user's name
@@ -58,11 +30,11 @@ int main(int argc, char **argv) {
     memset(&me, 0, sizeof(struct USER));
     
     while(gets(option)) {
-        if(!strncmp(option, "\\exit", 5)) {
+        if(!strncmp(option, "\\EXIT", 5)) {
             logout(&me);
             break;
         }
-        if(!strncmp(option, "\\help", 5)) {
+        if(!strncmp(option, "\\HELP", 5)) {
             FILE *fin = fopen("help.txt", "r");
             if(fin != NULL) {
                 while(fgets(option, LINEBUFF-1, fin)) puts(option);
@@ -72,7 +44,7 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "Help file not found...\n");
             }
         }
-        else if(!strncmp(option, "\\login", 6)) {
+        else if(!strncmp(option, "\\LOGIN", 6)) {
             char *ptr = strtok(option, " ");
             ptr = strtok(0, " ");
             memset(me.alias, 0, ALIASLEN);
@@ -85,7 +57,7 @@ int main(int argc, char **argv) {
             
             login(&me);
         }
-        else if(!strncmp(option, "\\nickserv", 9)) {
+        else if(!strncmp(option, "\\NICKSERV", 9)) {
             char *ptr = strtok(option, " ");
             ptr = strtok(0, " ");
             memset(me.alias, 0, sizeof(char) * ALIASLEN);
@@ -96,7 +68,7 @@ int main(int argc, char **argv) {
                 setalias(&me);
             }
         }
-	else if(!strncmp(option, "\\join", 8)) {
+	else if(!strncmp(option, "\\JOIN", 8)) {
 	   char *ptr = strtok(option, " ");
 	   ptr = strtok(0, " ");
 	   memset(me.channel, 0, CHNLEN);
@@ -118,7 +90,7 @@ int main(int argc, char **argv) {
                 sendtoalias(&me, temp, ptr);
             }
         }*/
-        else if(!strncmp(option, "\\logout", 7)) {
+        else if(!strncmp(option, "\\LOGOUT", 7)) {
             logout(&me);
         }
 	else sendtoall(&me, &option);
