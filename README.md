@@ -1,1 +1,1 @@
-Simple implementation of IRC protocol
+Simple implementation of the IRC protocol
