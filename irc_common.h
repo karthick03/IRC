@@ -23,10 +23,10 @@
 #define SERVERIP "127.0.0.1"
 #define LINEBUFF 2048
 
-struct PACKET {
+typedef struct d{
     char option[OPTLEN]; // instruction
     char alias[ALIASLEN]; // client's alias
     char channel[CHNLEN];
     char buff[BUFFSIZE]; // payload
-    time_t recvtime;
-};
+    time_t ptime;
+}PACKET;

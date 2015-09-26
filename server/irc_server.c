@@ -1,146 +1,90 @@
 #include "../irc_common.h"
-#define PORT 8080
- 
-struct THREADINFO {
+
+#define PATH(x) #x
+#define HOMEFILE ~/.server.txt
+typedef struct a {
     pthread_t thread_ID; // thread's pointer
     int sockfd; // socket file descriptor
     char alias[ALIASLEN]; // client's alias
-};
+} THREADINFO;
  
-struct LLNODE {
-    struct THREADINFO threadinfo;
-    struct LLNODE *next;
-};
+typedef struct b {
+    THREADINFO threadinfo;
+    struct b *next;
+} LLNODE;
  
-struct LLIST {
-    struct LLNODE *head, *tail;
+typedef struct c {
+    LLNODE *head, *tail;
     int size;
-};
+} LLIST;
  
-int compare(struct THREADINFO *a, struct THREADINFO *b) {
-    return a->sockfd - b->sockfd;
-}
- 
-void list_init(struct LLIST *ll) {
-    ll->head = ll->tail = NULL;
-    ll->size = 0;
-}
- 
-int list_insert(struct LLIST *ll, struct THREADINFO *thr_info) {
-    if(ll->size == CLIENTS) return -1;
-    if(ll->head == NULL) {
-        ll->head = (struct LLNODE *)malloc(sizeof(struct LLNODE));
-        ll->head->threadinfo = *thr_info;
-        ll->head->next = NULL;
-        ll->tail = ll->head;
-    }
-    else {
-        ll->tail->next = (struct LLNODE *)malloc(sizeof(struct LLNODE));
-        ll->tail->next->threadinfo = *thr_info;
-        ll->tail->next->next = NULL;
-        ll->tail = ll->tail->next;
-    }
-    ll->size++;
-    return 0;
-}
- 
-int list_delete(struct LLIST *ll, struct THREADINFO *thr_info) {
-    struct LLNODE *curr, *temp;
-    if(ll->head == NULL) return -1;
-    if(compare(thr_info, &ll->head->threadinfo) == 0) {
-        temp = ll->head;
-        ll->head = ll->head->next;
-        if(ll->head == NULL) ll->tail = ll->head;
-        free(temp);
-        ll->size--;
-        return 0;
-    }
-    for(curr = ll->head; curr->next != NULL; curr = curr->next) {
-        if(compare(thr_info, &curr->next->threadinfo) == 0) {
-            temp = curr->next;
-            if(temp == ll->tail) ll->tail = curr;
-            curr->next = curr->next->next;
-            free(temp);
-            ll->size--;
-            return 0;
-        }
-    }
-    return -1;
-}
- 
-void list_dump(struct LLIST *ll) {
-    struct LLNODE *curr;
-    struct THREADINFO *thr_info;
-    printf("Connection count: %d\n", ll->size);
-    for(curr = ll->head; curr != NULL; curr = curr->next) {
-        thr_info = &curr->threadinfo;
-        printf("[%d] %s\n", thr_info->sockfd, thr_info->alias);
-    }
-}
- 
-int sockfd, newfd;
-struct THREADINFO thread_info[CLIENTS];
-struct LLIST client_list;
+int sockfd, newfd, PORT, isconnected;
+THREADINFO thread_info[CLIENTS];
+LLIST client_list;
 pthread_mutex_t clientlist_mutex;
- 
-void *io_handler(void *param);
-void *client_handler(void *fd);
 
-void init_as_client(int sport, )
-{
-	int cfd = socket(AF_INET, SOCK_STREAM, 0);
+int compare(THREADINFO *, THREADINFO *);
+int list_insert(LLIST *, THREADINFO *);
+int list_delete(LLIST *, THREADINFO *);
+void list_init(LLIST *);
+void list_dump(LLIST *);
+int init_as_client(int);
+void *client_handler(void *);
+void *io_handler(void *);
+void *receiver(void *);
+int fileExists(char *);
+int getPortNumber(char *);
+void writeMyDetails(char *);
 
-	struct sockaddr_in serv_addr;    
-
-	/* set initial values */
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(sport);
-    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-	
-	
-}	
- 
 int main(int argc, char **argv) {
-    int err_ret, sin_size;
+    
+	if(argc < 2) {
+		fprintf(stderr, "Usage: client <port> \n");
+		exit(-1);
+	}
+
+   	PORT = atoi(argv[1]);	
+
+	int err_ret, sin_size;
     struct sockaddr_in serv_addr, client_addr;
     pthread_t interrupt;
+ 	
+	list_init(&client_list);
  
-    /* initialize linked list */
-    list_init(&client_list);
- 
-    /* initiate mutex */
     pthread_mutex_init(&clientlist_mutex, NULL);
+	
+	if(fileExists(PATH(HOMEFILE)))
+	{
+		if(init_as_client(getPortNumber(PATH(HOMEFILE)) == -1))
+			fprintf(stderr, "Can't connect to other server..will operate as solo server\n");
+		else if(pthread_create(&interrupt, NULL, receiver, NULL) != 0)
+			fprintf(stdout, "Waiting for messages from parent server...\n");
+	}
+	else writeMyDetails(PATH(HOMEFILE));
  
-    /* open a socket */
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         err_ret = errno;
         fprintf(stderr, "socket() failed...\n");
         return err_ret;
     }
  
-    /* set initial values */
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
     serv_addr.sin_addr.s_addr = inet_addr(IP);
     memset(&(serv_addr.sin_zero), 0, 8);
  
-    /* bind address with socket */
     if(bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) == -1) {
         err_ret = errno;
         fprintf(stderr, "bind() failed...\n");
         return err_ret;
     }
  
-    /* start listening for connection */
     if(listen(sockfd, BACKLOG) == -1) {
         err_ret = errno;
         fprintf(stderr, "listen() failed...\n");
         return err_ret;
     }
  
-    /* initiate interrupt handler for IO controlling */
     printf("Starting admin interface...\n");
     if(pthread_create(&interrupt, NULL, io_handler, NULL) != 0) {
         err_ret = errno;
@@ -148,7 +92,6 @@ int main(int argc, char **argv) {
         return err_ret;
     }
  
-    /* keep accepting connections */
     printf("Starting socket listener...\n");
     while(1) {
         sin_size = sizeof(struct sockaddr_in);
@@ -163,7 +106,7 @@ int main(int argc, char **argv) {
                 continue;
             }
             printf("Connection requested received...\n");
-            struct THREADINFO threadinfo;
+            THREADINFO threadinfo;
             threadinfo.sockfd = newfd;
             strcpy(threadinfo.alias, "Anonymous");
             pthread_mutex_lock(&clientlist_mutex);
@@ -175,18 +118,116 @@ int main(int argc, char **argv) {
  
     return 0;
 }
+
+int fileExists(char *path) { return (fopen(path, "r") != NULL) ? 1 : 0; }
+
+int getPortNumber(char *path)
+{
+	if(!fileExists(path)) return 0;
+
+	FILE *fp = fopen(path, "r");
+
+	return 1;
+}
+
+void writeMyDetails(char *path) {}
+
+int compare(THREADINFO *a, THREADINFO *b) { return a->sockfd - b->sockfd; }
+ 
+void list_init(LLIST *ll) {
+    ll->head = ll->tail = NULL;
+    ll->size = 0;
+}
+ 
+int list_insert(LLIST *ll, THREADINFO *thr_info) {
+    if(ll->size == CLIENTS) return -1;
+    if(ll->head == NULL) {
+        ll->head = (LLNODE *)malloc(sizeof(LLNODE));
+        ll->head->threadinfo = *thr_info;
+        ll->head->next = NULL;
+        ll->tail = ll->head;
+    }
+    else {
+        ll->tail->next = (LLNODE *) malloc(sizeof(LLNODE));
+        ll->tail->next->threadinfo = *thr_info;
+        ll->tail->next->next = NULL;
+        ll->tail = ll->tail->next;
+    }
+    ll->size++;
+    return 0;
+}
+ 
+int list_delete(LLIST *ll, THREADINFO *thr_info) {
+    LLNODE *curr, *temp;
+    
+	if(ll->head == NULL) return -1;
+    
+	if(compare(thr_info, &ll->head->threadinfo) == 0) {
+        temp = ll->head;
+        ll->head = ll->head->next;
+        if(ll->head == NULL) ll->tail = ll->head;
+        free(temp);
+        ll->size--;
+        return 0;
+    }
+    
+	for(curr = ll->head; curr->next != NULL; curr = curr->next) {
+        if(compare(thr_info, &curr->next->threadinfo) == 0) {
+            temp = curr->next;
+            if(temp == ll->tail) ll->tail = curr;
+            curr->next = curr->next->next;
+            free(temp);
+            ll->size--;
+            return 0;
+        }
+    }
+    return -1;
+}
+ 
+void list_dump(LLIST *ll) {
+    LLNODE *curr;
+    THREADINFO *thr_info;
+    printf("Connection count: %d\n", ll->size);
+    
+	for(curr = ll->head; curr != NULL; curr = curr->next) {
+        thr_info = &curr->threadinfo;
+        printf("[%d] %s\n", thr_info->sockfd, thr_info->alias);
+    }
+}
+ 
+ 
+int init_as_client(int sport)
+{
+	int cfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if(cfd == -1) return -1;
+
+	struct sockaddr_in serv_addr;    
+
+	serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(sport);
+    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+	if(connect(cfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0)
+		return -1;
+
+	PACKET packet;
+
+//	packet.
+
+	return 0;
+}	
  
 void *io_handler(void *param) {
     char option[OPTLEN];
-    while(scanf("%s", option)==1) {
-        if(!strcmp(option, "exit")) {
-            /* clean up */
+    while(scanf("%s", option) == 1) {
+        if(!strcmp(option, "\\EXIT")) {
             printf("Terminating server...\n");
-            pthread_mutex_destroy(&clientlist_mutex);
+			pthread_mutex_destroy(&clientlist_mutex);
             close(sockfd);
             exit(0);
         }
-        else if(!strcmp(option, "list")) {
+        else if(!strcmp(option, "\\LIST")) {
             pthread_mutex_lock(&clientlist_mutex);
             list_dump(&client_list);
             pthread_mutex_unlock(&clientlist_mutex);
@@ -199,20 +240,24 @@ void *io_handler(void *param) {
 }
  
 void *client_handler(void *fd) {
-    struct THREADINFO threadinfo = *(struct THREADINFO *)fd;
-    struct PACKET packet;
-    struct LLNODE *curr;
+   
+   	THREADINFO threadinfo = *(THREADINFO *)fd;
+    PACKET packet;
+    LLNODE *curr;
     int bytes, sent;
     while(1) {
-        bytes = recv(threadinfo.sockfd, (void *)&packet, sizeof(struct PACKET), 0);
-        if(!bytes) {
+        bytes = recv(threadinfo.sockfd, (void *)&packet, sizeof(PACKET), 0);
+        
+		if(!bytes) {
             fprintf(stderr, "Connection lost from [%d] %s...\n", threadinfo.sockfd, threadinfo.alias);
             pthread_mutex_lock(&clientlist_mutex);
             list_delete(&client_list, &threadinfo);
             pthread_mutex_unlock(&clientlist_mutex);
             break;
         }
-        printf("[%d] %s %s %s %d %s\n", threadinfo.sockfd, packet.option, packet.alias, packet.channel, packet.recvtime, packet.buff);
+        
+		printf("[%d] %s %s %s %u %s\n", threadinfo.sockfd, packet.option, packet.alias, packet.channel, (unsigned)packet.ptime, packet.buff);
+
         if(!strcmp(packet.option, "alias")) {
             printf("Set alias to %s\n", packet.alias);
             pthread_mutex_lock(&clientlist_mutex);
@@ -233,13 +278,13 @@ void *client_handler(void *fd) {
             pthread_mutex_lock(&clientlist_mutex);
             for(curr = client_list.head; curr != NULL; curr = curr->next) {
                 if(strcmp(target, curr->threadinfo.alias) == 0) {
-                    struct PACKET spacket;
-                    memset(&spacket, 0, sizeof(struct PACKET));
+                    PACKET spacket;
+                    memset(&spacket, 0, sizeof(PACKET));
                     if(!compare(&curr->threadinfo, &threadinfo)) continue;
                     strcpy(spacket.option, "msg");
                     strcpy(spacket.alias, packet.alias);
                     strcpy(spacket.buff, &packet.buff[i]);
-                    sent = send(curr->threadinfo.sockfd, (void *)&spacket, sizeof(struct PACKET), 0);
+                    sent = send(curr->threadinfo.sockfd, (void *)&spacket, sizeof(PACKET), 0);
                 }
             }
             pthread_mutex_unlock(&clientlist_mutex);
@@ -254,22 +299,43 @@ void *client_handler(void *fd) {
         else {
             pthread_mutex_lock(&clientlist_mutex);
             for(curr = client_list.head; curr != NULL; curr = curr->next) {
-                struct PACKET spacket;
-                memset(&spacket, 0, sizeof(struct PACKET));
+                PACKET spacket;
+                memset(&spacket, 0, sizeof(PACKET));
                 if(!compare(&curr->threadinfo, &threadinfo)) continue;
                 strcpy(spacket.option, "msg");
                 strcpy(spacket.alias, packet.alias);
                 strcpy(spacket.buff, packet.buff);
-		strcpy(spacket.channel, packet.channel);
-		spacket.recvtime = packet.recvtime;
-                sent = send(curr->threadinfo.sockfd, (void *)&spacket, sizeof(struct PACKET), 0);
+				strcpy(spacket.channel, packet.channel);
+				spacket.ptime = packet.ptime;
+                sent = send(curr->threadinfo.sockfd, (void *)&spacket, sizeof(PACKET), 0);
             }
             pthread_mutex_unlock(&clientlist_mutex);
         }
     }
  
-    /* clean up */
     close(threadinfo.sockfd);
  
+    return NULL;
+}
+
+void *receiver(void *param) {
+    int recvd;
+    PACKET packet;
+    
+    printf("Waiting here [%d]...\n", sockfd);
+    while(isconnected) {
+        
+        recvd = recv(sockfd, (void *)&packet, sizeof(PACKET), 0);
+        if(!recvd) {
+            fprintf(stderr, "Connection lost from parent server...\n");
+            isconnected = 0;
+            close(sockfd);
+            break;
+        }
+        if(recvd > 0) {
+			printf("[%s] <%s>: %s\n", ctime(&packet.ptime), packet.alias, packet.buff);
+        }
+        memset(&packet, 0, sizeof(PACKET));
+    }
     return NULL;
 }

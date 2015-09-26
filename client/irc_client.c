@@ -2,8 +2,8 @@
 #define SERVERPORT 8080
 
 struct USER {
-        int sockfd; // user's socket descriptor
-        char alias[ALIASLEN]; // user's name
+	int sockfd; // user's socket descriptor
+	char alias[ALIASLEN]; // user's name
 	char channel[CHNLEN]; //channel's name
 };
  
@@ -12,7 +12,7 @@ struct THREADINFO {
     int sockfd; // socket file descriptor
 };
  
-int isconnected, sockfd;
+int isconnected, sockfd, SERVERPORT;
 char option[LINEBUFF];
 struct USER me;
  
@@ -25,8 +25,15 @@ void sendtoall(struct USER *me, char *msg);
 void sendtoalias(struct USER *me, char * target, char *msg);
  
 int main(int argc, char **argv) {
-    int sockfd, aliaslen;
-    
+
+	int sockfd, aliaslen;
+   
+	if(argc < 2) {
+		fprintf(stderr, "Usage: server <port> \n");
+		exit(-1);
+	}
+
+   	SERVERPORT = atoi(argv[1]);	
     memset(&me, 0, sizeof(struct USER));
     
     while(gets(option)) {
@@ -68,14 +75,12 @@ int main(int argc, char **argv) {
                 setalias(&me);
             }
         }
-	else if(!strncmp(option, "\\JOIN", 8)) {
-	   char *ptr = strtok(option, " ");
-	   ptr = strtok(0, " ");
-	   memset(me.channel, 0, CHNLEN);
-	   if(ptr != NULL) {
-		strcpy(me.channel, ptr);
+		else if(!strncmp(option, "\\JOIN", 8)) {
+		   char *ptr = strtok(option, " ");
+		   ptr = strtok(0, " ");
+		   memset(me.channel, 0, CHNLEN);
+		   if(ptr != NULL) strcpy(me.channel, ptr);
 		}
-	}
        /* else if(!strncmp(option, "whisp", 5)) {
             char *ptr = strtok(option, " ");
             char temp[ALIASLEN];
@@ -93,7 +98,7 @@ int main(int argc, char **argv) {
         else if(!strncmp(option, "\\LOGOUT", 7)) {
             logout(&me);
         }
-	else sendtoall(&me, &option);
+		else sendtoall(&me, &option);
     }
     return 0;
 }
@@ -208,7 +213,7 @@ void *receiver(void *param) {
         if(recvd > 0) {
 		printf("in receiver %s", packet.channel);
 	    	if(!strcmp(packet.channel, me.channel)) 
-			printf("[%s] <%s>: %s\n", ctime(&packet.sendtime), packet.alias, packet.buff);
+			printf("[%s] <%s>: %s\n", ctime(&packet.ptime), packet.alias, packet.buff);
         }
         memset(&packet, 0, sizeof(struct PACKET));
     }
@@ -232,7 +237,7 @@ void sendtoall(struct USER *me, char *msg) {
     strcpy(packet.buff, msg);
     strcpy(packet.channel, me->channel);
 
-    packet.sendtime = time(NULL);
+    packet.ptime = time(NULL);
     
     /* send request to close this connetion */
     sent = send(sockfd, (void *)&packet, sizeof(struct PACKET), 0);
