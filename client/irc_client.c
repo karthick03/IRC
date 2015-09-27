@@ -1,28 +1,27 @@
 #include "../irc_common.h"
-#define SERVERPORT 8080
 
-struct USER {
+typedef struct f {
 	int sockfd; // user's socket descriptor
 	char alias[ALIASLEN]; // user's name
 	char channel[CHNLEN]; //channel's name
-};
+}USER;
  
-struct THREADINFO {
+typedef struct e{
     pthread_t thread_ID; // thread's pointer
     int sockfd; // socket file descriptor
-};
+}THREADINFO;
  
 int isconnected, sockfd, SERVERPORT;
 char option[LINEBUFF];
-struct USER me;
+USER me;
  
 int connect_with_server();
-void setalias(struct USER *me);
-void logout(struct USER *me);
-void login(struct USER *me);
+void setalias(USER *me);
+void logout(USER *me);
+void login(USER *me);
 void *receiver(void *param);
-void sendtoall(struct USER *me, char *msg);
-void sendtoalias(struct USER *me, char * target, char *msg);
+void sendtoall(USER *me, char *msg);
+void sendtoalias(USER *me, char * target, char *msg);
  
 int main(int argc, char **argv) {
 
@@ -33,8 +32,9 @@ int main(int argc, char **argv) {
 		exit(-1);
 	}
 
+	printf("Type \\HELP to see help\n");
    	SERVERPORT = atoi(argv[1]);	
-    memset(&me, 0, sizeof(struct USER));
+    memset(&me, 0, sizeof(USER));
     
     while(gets(option)) {
         if(!strncmp(option, "\\EXIT", 5)) {
@@ -42,14 +42,12 @@ int main(int argc, char **argv) {
             break;
         }
         if(!strncmp(option, "\\HELP", 5)) {
-            FILE *fin = fopen("help.txt", "r");
-            if(fin != NULL) {
-                while(fgets(option, LINEBUFF-1, fin)) puts(option);
-                fclose(fin);
-            }
-            else {
-                fprintf(stderr, "Help file not found...\n");
-            }
+			printf("\\HELP - to get a list of commands\n");
+			printf("\\LOGIN - to login into the network\n");
+			printf("\\NICKSERV - to register/change you nick\n");
+			printf("\\JOIN - to join a particular channels\n");
+			printf("\\LOGOUT - to quit the network\n");
+			printf("\\EXIT - to quit the network and exit the application\n");
         }
         else if(!strncmp(option, "\\LOGIN", 6)) {
             char *ptr = strtok(option, " ");
@@ -103,7 +101,7 @@ int main(int argc, char **argv) {
     return 0;
 }
  
-void login(struct USER *me) {
+void login(USER *me) {
     int recvd;
     if(isconnected) {
         fprintf(stderr, "You are already connected to server at %s:%d\n", SERVERIP, SERVERPORT);
@@ -116,7 +114,7 @@ void login(struct USER *me) {
         if(strcmp(me->alias, "Anonymous")) setalias(me);
         printf("Logged in as %s\n", me->alias);
         printf("Receiver started [%d]...\n", sockfd);
-        struct THREADINFO threadinfo;
+        THREADINFO threadinfo;
         pthread_create(&threadinfo.thread_ID, NULL, receiver, (void *)&threadinfo);
  
     }
@@ -161,49 +159,49 @@ int connect_with_server() {
     }
 }
  
-void logout(struct USER *me) {
+void logout(USER *me) {
     int sent;
-    struct PACKET packet;
+    PACKET packet;
     
     if(!isconnected) {
         fprintf(stderr, "You are not connected...\n");
         return;
     }
     
-    memset(&packet, 0, sizeof(struct PACKET));
+    memset(&packet, 0, sizeof(PACKET));
     strcpy(packet.option, "exit");
     strcpy(packet.alias, me->alias);
     
     /* send request to close this connetion */
-    sent = send(sockfd, (void *)&packet, sizeof(struct PACKET), 0);
+    sent = send(sockfd, (void *)&packet, sizeof(PACKET), 0);
     isconnected = 0;
 }
  
-void setalias(struct USER *me) {
+void setalias(USER *me) {
     int sent;
-    struct PACKET packet;
+    PACKET packet;
     
     if(!isconnected) {
         fprintf(stderr, "You are not connected...\n");
         return;
     }
     
-    memset(&packet, 0, sizeof(struct PACKET));
+    memset(&packet, 0, sizeof(PACKET));
     strcpy(packet.option, "alias");
     strcpy(packet.alias, me->alias);
     
     /* send request to close this connetion */
-    sent = send(sockfd, (void *)&packet, sizeof(struct PACKET), 0);
+    sent = send(sockfd, (void *)&packet, sizeof(PACKET), 0);
 }
  
 void *receiver(void *param) {
     int recvd;
-    struct PACKET packet;
+    PACKET packet;
     
     printf("Waiting here [%d]...\n", sockfd);
     while(isconnected) {
         
-        recvd = recv(sockfd, (void *)&packet, sizeof(struct PACKET), 0);
+        recvd = recv(sockfd, (void *)&packet, sizeof(PACKET), 0);
         if(!recvd) {
             fprintf(stderr, "Connection lost from server...\n");
             isconnected = 0;
@@ -215,14 +213,14 @@ void *receiver(void *param) {
 	    	if(!strcmp(packet.channel, me.channel)) 
 			printf("[%s] <%s>: %s\n", ctime(&packet.ptime), packet.alias, packet.buff);
         }
-        memset(&packet, 0, sizeof(struct PACKET));
+        memset(&packet, 0, sizeof(PACKET));
     }
     return NULL;
 }
  
-void sendtoall(struct USER *me, char *msg) {
+void sendtoall(USER *me, char *msg) {
     int sent;
-    struct PACKET packet;
+    PACKET packet;
     
     if(!isconnected) {
         fprintf(stderr, "You are not connected...\n");
@@ -231,7 +229,7 @@ void sendtoall(struct USER *me, char *msg) {
     
     msg[BUFFSIZE] = 0;
     
-    memset(&packet, 0, sizeof(struct PACKET));
+    memset(&packet, 0, sizeof(PACKET));
     strcpy(packet.option, "send");
     strcpy(packet.alias, me->alias);
     strcpy(packet.buff, msg);
@@ -240,18 +238,14 @@ void sendtoall(struct USER *me, char *msg) {
     packet.ptime = time(NULL);
     
     /* send request to close this connetion */
-    sent = send(sockfd, (void *)&packet, sizeof(struct PACKET), 0);
+    sent = send(sockfd, (void *)&packet, sizeof(PACKET), 0);
 }
  
-void sendtoalias(struct USER *me, char *target, char *msg) {
+void sendtoalias(USER *me, char *target, char *msg) {
     int sent, targetlen;
-    struct PACKET packet;
+    PACKET packet;
     
-    if(target == NULL) { 
-        return;
-    }
-    
-    if(msg == NULL) {
+    if(target == NULL || msg == NULL) { 
         return;
     }
     
@@ -259,10 +253,11 @@ void sendtoalias(struct USER *me, char *target, char *msg) {
         fprintf(stderr, "You are not connected...\n");
         return;
     }
+
     msg[BUFFSIZE] = 0;
     targetlen = strlen(target);
     
-    memset(&packet, 0, sizeof(struct PACKET));
+    memset(&packet, 0, sizeof(PACKET));
     strcpy(packet.option, "whisp");
     strcpy(packet.alias, me->alias);
     strcpy(packet.buff, target);
@@ -270,5 +265,5 @@ void sendtoalias(struct USER *me, char *target, char *msg) {
     strcpy(&packet.buff[targetlen+1], msg);
     
     /* send request to close this connetion */
-    sent = send(sockfd, (void *)&packet, sizeof(struct PACKET), 0);
+    sent = send(sockfd, (void *)&packet, sizeof(PACKET), 0);
 }

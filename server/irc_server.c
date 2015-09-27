@@ -1,7 +1,7 @@
 #include "../irc_common.h"
 
 #define PATH(x) #x
-#define HOMEFILE ~/.server.txt
+#define HOMEFILE PATH(server.txt)
 typedef struct a {
     pthread_t thread_ID; // thread's pointer
     int sockfd; // socket file descriptor
@@ -52,15 +52,15 @@ int main(int argc, char **argv) {
 	list_init(&client_list);
  
     pthread_mutex_init(&clientlist_mutex, NULL);
-	
-	if(fileExists(PATH(HOMEFILE)))
+
+	if(fileExists(HOMEFILE) == 1)
 	{
-		if(init_as_client(getPortNumber(PATH(HOMEFILE)) == -1))
+		if(init_as_client(getPortNumber(HOMEFILE)) == -1)
 			fprintf(stderr, "Can't connect to other server..will operate as solo server\n");
 		else if(pthread_create(&interrupt, NULL, receiver, NULL) != 0)
 			fprintf(stdout, "Waiting for messages from parent server...\n");
 	}
-	else writeMyDetails(PATH(HOMEFILE));
+	else writeMyDetails(HOMEFILE);
  
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         err_ret = errno;
@@ -119,18 +119,40 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-int fileExists(char *path) { return (fopen(path, "r") != NULL) ? 1 : 0; }
+int fileExists(char *path) 
+{ 
+	FILE *fp = fopen(path, "r"); 
+	if(fp == NULL){
+		printf("fp is NULL\n");
+	   	return 0;
+	}
+	else return 1;
+}
 
 int getPortNumber(char *path)
 {
-	if(!fileExists(path)) return 0;
+	if(!fileExists(path)) return -1;
 
-	FILE *fp = fopen(path, "r");
+	char tmpbuf[50];
+	sprintf(tmpbuf, "tail -n1 %s | awk '{print $2}' >> o.txt", path);
+	system(tmpbuf);
 
-	return 1;
+	FILE *fp = fopen("o.txt", "r");
+	fgets(tmpbuf, 5, fp);
+	if(strlen(tmpbuf) == 5) tmpbuf[5] = '\0';
+
+	system("rm o.txt");
+	return atoi(tmpbuf);
 }
 
-void writeMyDetails(char *path) {}
+void writeMyDetails(char *path) 
+{
+	char tmpbuf[50];
+	sprintf(tmpbuf, "echo \"server %d\" >> %s", PORT, path);
+
+	printf("%s", path);
+	system(tmpbuf);
+}
 
 int compare(THREADINFO *a, THREADINFO *b) { return a->sockfd - b->sockfd; }
  
@@ -211,9 +233,10 @@ int init_as_client(int sport)
 	if(connect(cfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0)
 		return -1;
 
+	isconnected = 1;
 	PACKET packet;
 
-//	packet.
+
 
 	return 0;
 }	
@@ -324,7 +347,7 @@ void *receiver(void *param) {
     
     printf("Waiting here [%d]...\n", sockfd);
     while(isconnected) {
-        
+       printf("in connected"); 
         recvd = recv(sockfd, (void *)&packet, sizeof(PACKET), 0);
         if(!recvd) {
             fprintf(stderr, "Connection lost from parent server...\n");
